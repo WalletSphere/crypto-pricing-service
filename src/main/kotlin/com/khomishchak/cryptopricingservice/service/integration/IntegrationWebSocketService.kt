@@ -7,5 +7,5 @@ import com.khomishchak.cryptopricingservice.model.integration.CryptoExchanger
 interface IntegrationWebSocketService {
     fun getCryptoExchangerType(): CryptoExchanger
     fun connect(client: OkHttpClient)
-    fun subscribe(accoutId: Long, tickers: List<String>)
+    fun subscribe(accountId: Long, tickers: List<String>)
 }

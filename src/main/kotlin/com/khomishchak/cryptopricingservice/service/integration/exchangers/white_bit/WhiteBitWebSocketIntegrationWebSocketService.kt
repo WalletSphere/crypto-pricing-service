@@ -1,7 +1,6 @@
 package com.khomishchak.cryptopricingservice.service.integration.exchangers.white_bit
 
 import com.google.gson.Gson
-
 import org.springframework.stereotype.Service
 import com.khomishchak.cryptopricingservice.service.integration.IntegrationWebSocketService
 import com.khomishchak.cryptopricingservice.model.integration.CryptoExchanger
@@ -13,6 +12,8 @@ import okhttp3.Request
 import okhttp3.WebSocketListener
 import okhttp3.WebSocket
 import okhttp3.Response
+import org.slf4j.LoggerFactory
+import java.util.concurrent.ConcurrentHashMap
 
 const val WEBSOCKET_CONNECT_URL = "wss://api.whitebit.com/ws";
 @Service
@@ -22,11 +23,10 @@ class WhiteBitWebSocketIntegrationWebSocketService(val wsResponseMapper: WsRespo
 
     private val gson = Gson()
 
-    private lateinit var subscribers: MutableMap<String, MutableList<Long>>// = mutableMapOf<String, MutableList<Long>>()
-
-    init {
-        subscribers = mutableMapOf<String, MutableList<Long>>()
-    }
+    private var subscribers = ConcurrentHashMap<String, MutableList<Long>>()
+    private var subscribedTickers = mutableListOf<String>()
+    private val logger = LoggerFactory.getLogger(javaClass)
+    private lateinit var webSocket: WebSocket
 
     override fun getCryptoExchangerType(): CryptoExchanger = CryptoExchanger.WHITE_BIT
 
@@ -35,51 +35,67 @@ class WhiteBitWebSocketIntegrationWebSocketService(val wsResponseMapper: WsRespo
                 .url(WEBSOCKET_CONNECT_URL)
                 .build()
 
-        val listener = WhiteBitWebSocketIntegrationWebSocketService(wsResponseMapper, sessionMappingService)
-        client.newWebSocket(request, listener)
+        client.newWebSocket(request, this)
     }
 
-    override fun subscribe(accoutId: Long, tickers: List<String>) {
+    override fun subscribe(accountId: Long, tickers: List<String>) {
+        var shouldReloadWsConnection = false
         tickers.forEach { ticker ->
-            run {
-                if (subscribers[ticker] == null) {
-                    subscribers[ticker] = mutableListOf(accoutId)
-                } else {
-                    subscribers[ticker]?.add(accoutId)
-                }
-            }
+            if (addNewTickerOrAccountAsSubscriber(ticker, accountId)) shouldReloadWsConnection = true
         }
-        println("on subscribe: ${subscribers["NEAR"]?.size}")
+        if (shouldReloadWsConnection) updateSubscribedTickerForConnection()
+    }
+
+    private fun addNewTickerOrAccountAsSubscriber(ticker: String, accountId: Long): Boolean {
+        val isNewTicker = subscribers[ticker] == null
+        subscribers.getOrPut(ticker) { mutableListOf(accountId) }
+        return isNewTicker
+    }
+
+    private fun addTickerAsNew(ticker: String, accoutId: Long) {
+        subscribers[ticker] = mutableListOf(accoutId)
+        subscribedTickers.add("${ticker}_USDT")
     }
 
     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = t.printStackTrace()
 
-    override fun onMessage(webSocket: WebSocket, text: String) {
-        notifyUsersWithMarketUpdate(text)
+    override fun onMessage(webSocket: WebSocket, text: String) = notifyUsersWithMarketUpdate(text)
+
+    private fun notifyUsersWithMarketUpdate(text: String) {
+        wsResponseMapper.mapRespToMarketUpdate(text).also {
+            if (it.method != "market_update") return
+            val ticker: String = getTickerFromResp(it)
+            notifyAccounts(it, ticker)
+        }
     }
 
-    fun notifyUsersWithMarketUpdate(text: String) {
-        println("on message: ${subscribers.size}")
-//        wsResponseMapper.mapRespToMarketUpdate(text).also { update ->
-//            if (update.method != "market_update") return
-//            val ticker: String = update.params[0].toString().split("_")[0];
-//            println(ticker)
-//            subscribers[ticker]?.let {
-//                notifyAccounts(it, update)
-//            }
-//        }
+    private fun updateSubscribedTickerForConnection() {
+        val subscribeMessage = mapOf(
+                "id" to 737457,
+                "method" to "market_subscribe",
+                "params" to subscribedTickers
+        )
+        webSocket.send(gson.toJson(subscribeMessage))
+        logger.info("WhiteBit WS connection was updated")
     }
 
-    private fun notifyAccounts(accountsToBeNotified: MutableList<Long>, update: WhiteBitWSMarketResp) {
-        accountsToBeNotified.forEach {accountId -> sessionMappingService.sendMessageToSession(accountId, update.toString())}
+    private fun getTickerFromResp(update: WhiteBitWSMarketResp): String {
+        return update.params.firstOrNull()?.toString()?.split("_")?.get(0).orEmpty()
+    }
+
+    private fun notifyAccounts(update: WhiteBitWSMarketResp, ticker: String) {
+        subscribers[ticker]?.let {
+            notifyAccountsForTicker(it, update)
+        }
+    }
+
+    private fun notifyAccountsForTicker(accountsToBeNotified: MutableList<Long>, update: WhiteBitWSMarketResp) {
+        accountsToBeNotified.forEach {
+            sessionMappingService.sendMessageToSession(it, update.toString())}
     }
 
     override fun onOpen(webSocket: WebSocket, response: Response) {
-        val subscribeMessage = mapOf(
-                "id" to 1,
-                "method" to "market_subscribe",
-                "params" to listOf("NEAR_USDT")
-        )
-        webSocket.send(gson.toJson(subscribeMessage))
+        this.webSocket = webSocket
+        logger.info("established connection with WhiteBit WS successfully!")
     }
 }

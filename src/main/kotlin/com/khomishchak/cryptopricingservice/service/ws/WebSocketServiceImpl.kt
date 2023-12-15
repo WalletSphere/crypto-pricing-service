@@ -10,14 +10,15 @@ class WebSocketServiceImpl (private val integrationWebSocketConnectors: List<Int
     : WebSocketService {
 
     private val client = OkHttpClient()
+    private val websocketIntegrations: Map<CryptoExchanger, IntegrationWebSocketService> =
+            integrationWebSocketConnectors.associateBy { it.getCryptoExchangerType() }
 
     init {
         integrationWebSocketConnectors.forEach { connector -> connector.connect(client) }
     }
 
     override fun subscribe(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>) {
-        integrationWebSocketConnectors
-                .filter { connector -> exchanger == connector.getCryptoExchangerType() }[0].subscribe(accountId, tickers)
+        websocketIntegrations[exchanger]?.subscribe(accountId, tickers)
     }
 
 }
