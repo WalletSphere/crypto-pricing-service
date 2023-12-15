@@ -26,6 +26,7 @@ class WhiteBitWebSocketIntegrationWebSocketService(val wsResponseMapper: WsRespo
     private var subscribers = ConcurrentHashMap<String, MutableList<Long>>()
     private var subscribedTickers = mutableListOf<String>()
     private val logger = LoggerFactory.getLogger(javaClass)
+
     private lateinit var webSocket: WebSocket
 
     override fun getCryptoExchangerType(): CryptoExchanger = CryptoExchanger.WHITE_BIT
