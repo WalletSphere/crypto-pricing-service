@@ -17,8 +17,6 @@ class WebSocketServiceImpl (private val integrationWebSocketConnectors: List<Int
         integrationWebSocketConnectors.forEach { connector -> connector.connect(client) }
     }
 
-    override fun subscribe(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>) {
-        websocketIntegrations[exchanger]?.subscribe(accountId, tickers)
-    }
-
+    override fun subscribe(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>) =
+        websocketIntegrations[exchanger]?.subscribe(accountId, tickers) ?: Unit
 }

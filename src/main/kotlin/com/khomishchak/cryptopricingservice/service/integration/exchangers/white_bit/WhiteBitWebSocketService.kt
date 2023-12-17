@@ -5,7 +5,7 @@ import org.springframework.stereotype.Service
 import com.khomishchak.cryptopricingservice.service.integration.IntegrationWebSocketService
 import com.khomishchak.cryptopricingservice.model.integration.CryptoExchanger
 import com.khomishchak.cryptopricingservice.model.integration.WhiteBitWSMarketResp
-import com.khomishchak.cryptopricingservice.service.integration.exchangers.white_bit.mapper.WsResponseMapper
+import com.khomishchak.cryptopricingservice.model.integration.mapRespToMarketUpdate
 import com.khomishchak.cryptopricingservice.service.ws.SessionMappingService
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -16,9 +16,9 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 
 const val WEBSOCKET_CONNECT_URL = "wss://api.whitebit.com/ws";
+
 @Service
-class WhiteBitWebSocketIntegrationWebSocketService(val wsResponseMapper: WsResponseMapper,
-                                                   val sessionMappingService: SessionMappingService)
+class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
     : IntegrationWebSocketService, WebSocketListener() {
 
     private val gson = Gson()
@@ -49,7 +49,10 @@ class WhiteBitWebSocketIntegrationWebSocketService(val wsResponseMapper: WsRespo
 
     private fun addNewTickerOrAccountAsSubscriber(ticker: String, accountId: Long): Boolean {
         val isNewTicker = subscribers[ticker] == null
-        subscribers.getOrPut(ticker) { mutableListOf(accountId) }
+        ticker.let {
+            subscribers.getOrPut(it) { mutableListOf(accountId) }
+            addTickerAsNew(it, accountId)
+        }
         return isNewTicker
     }
 
@@ -58,17 +61,19 @@ class WhiteBitWebSocketIntegrationWebSocketService(val wsResponseMapper: WsRespo
         subscribedTickers.add("${ticker}_USDT")
     }
 
-    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = t.printStackTrace()
+    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) =
+            logger.error("got failure for WhiteBit WS connection, error: ${t.message}")
 
     override fun onMessage(webSocket: WebSocket, text: String) = notifyUsersWithMarketUpdate(text)
 
-    private fun notifyUsersWithMarketUpdate(text: String) {
-        wsResponseMapper.mapRespToMarketUpdate(text).also {
-            if (it.method != "market_update") return
-            val ticker: String = getTickerFromResp(it)
-            notifyAccounts(it, ticker)
-        }
-    }
+    private fun notifyUsersWithMarketUpdate(text: String) =
+        gson.mapRespToMarketUpdate<WhiteBitWSMarketResp>(text).takeIf {it.method == "market_update" }
+                ?.let {
+                    val ticker: String = getTickerFromResp(it)
+                    notifyAccounts(it, ticker)
+                } ?: Unit
+
+
 
     private fun updateSubscribedTickerForConnection() {
         val subscribeMessage = mapOf(
@@ -80,20 +85,15 @@ class WhiteBitWebSocketIntegrationWebSocketService(val wsResponseMapper: WsRespo
         logger.info("WhiteBit WS connection was updated")
     }
 
-    private fun getTickerFromResp(update: WhiteBitWSMarketResp): String {
-        return update.params.firstOrNull()?.toString()?.split("_")?.get(0).orEmpty()
-    }
+    private fun getTickerFromResp(update: WhiteBitWSMarketResp): String =
+            update.params.firstOrNull()?.toString()?.substringBefore("_").orEmpty()
 
-    private fun notifyAccounts(update: WhiteBitWSMarketResp, ticker: String) {
-        subscribers[ticker]?.let {
-            notifyAccountsForTicker(it, update)
-        }
-    }
 
-    private fun notifyAccountsForTicker(accountsToBeNotified: MutableList<Long>, update: WhiteBitWSMarketResp) {
-        accountsToBeNotified.forEach {
-            sessionMappingService.sendMessageToSession(it, update.toString())}
-    }
+    private fun notifyAccounts(update: WhiteBitWSMarketResp, ticker: String) =
+            subscribers[ticker]?.let { notifyAccountsForTicker(it, update) }
+
+    private fun notifyAccountsForTicker(accountsToBeNotified: MutableList<Long>, update: WhiteBitWSMarketResp) =
+            accountsToBeNotified.forEach { sessionMappingService.sendMessageToSession(it, update.toString())}
 
     override fun onOpen(webSocket: WebSocket, response: Response) {
         this.webSocket = webSocket

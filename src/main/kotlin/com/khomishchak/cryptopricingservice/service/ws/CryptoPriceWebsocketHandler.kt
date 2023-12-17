@@ -10,14 +10,15 @@ class CryptoPriceWebsocketHandler (private val sessionMappingService: SessionMap
                                    private val webSocketService: WebSocketService): TextWebSocketHandler() {
 
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
-        val payload = message.payload
-        val json = JsonParser.parseString(payload).asJsonObject
-        val accountId = json["accountId"].asLong
-        val exchanger = CryptoExchanger.valueOf(json["exchanger"].asString)
-        val tickersJsonArray = json["tickers"].asJsonArray
-        val tickers: List<String> = tickersJsonArray.map { it.asString }
+        val json = JsonParser.parseString(message.payload).asJsonObject
+        val method = json["method"].asString
 
-        if (json["method"].asString == "subscribe_market") {
+        if (method == "subscribe_market") {
+            val accountId = json["accountId"].asLong
+            val exchanger = CryptoExchanger.valueOf(json["exchanger"].asString)
+            val tickersJsonArray = json["tickers"].asJsonArray
+            val tickers: List<String> = tickersJsonArray.map { it.asString }
+
             sessionMappingService.registerSession(session, accountId)
             webSocketService.subscribe(accountId, exchanger, tickers)
         }

@@ -17,14 +17,9 @@ class SessionMappingService {
     // TODO: implement remove session functionality
     fun removeSession(accountId: Long) = sessionMap.remove(accountId)
 
-    fun getSession(accountId: Long): WebSocketSession? = sessionMap[accountId]?.values?.toList()?.get(0);
+    fun getSession(accountId: Long): WebSocketSession? = sessionMap[accountId]?.values?.firstOrNull();
 
-    fun sendMessageToSession(accountId: Long, message: String) {
-        val session = getSession(accountId)
-        session?.let {
-            if (it.isOpen) {
-                it.sendMessage(TextMessage(message))
-            }
-        }
-    }
+    fun sendMessageToSession(accountId: Long, message: String) =
+            getSession(accountId)?.takeIf { it.isOpen
+            }?.sendMessage(TextMessage(message))
 }
