@@ -21,8 +21,13 @@ class CryptoPriceWebsocketHandler (private val sessionMappingService: SessionMap
 
             sessionMappingService.registerSession(session, accountId)
             webSocketService.subscribe(accountId, exchanger, tickers)
+            sendLatestPrices(accountId, exchanger, tickers)
         }
     }
 
+    private fun sendLatestPrices(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>) {
+        var lastPrices = webSocketService.getLastPrices(accountId, exchanger, tickers)
+        sessionMappingService.sendMessageToSession(accountId, lastPrices.toString())
 
+    }
 }

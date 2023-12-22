@@ -19,4 +19,7 @@ class WebSocketServiceImpl (private val integrationWebSocketConnectors: List<Int
 
     override fun subscribe(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>) =
         websocketIntegrations[exchanger]?.subscribe(accountId, tickers) ?: Unit
+
+    override fun getLastPrices(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>) =
+        websocketIntegrations[exchanger]!!.getLastPrices(accountId, tickers)
 }
