@@ -23,6 +23,9 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
 
     private val gson = Gson()
 
+    val stablecoins = setOf("UAH", "USD", "PLN")
+    val shouldBeMappedTickets = mapOf("USDT" to "USD", "WBT-HOLD" to "WBT")
+
     private var subscribers = ConcurrentHashMap<String, MutableList<Long>>()
     private var subscribedTickers = mutableListOf<String>()
 
@@ -42,6 +45,7 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
         client.newWebSocket(request, this)
     }
 
+    // TODO: should be refactored
     override fun subscribe(accountId: Long, tickers: List<String>) {
         var shouldReloadWsConnection = false
         tickers.forEach { ticker ->
@@ -61,8 +65,17 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
 
     private fun addNewTicker(ticker: String, accoutId: Long) {
         subscribers[ticker] = mutableListOf(accoutId)
-        subscribedTickers.add("${ticker}_USDT")
+        addNewTickerToSubscribedTickers(ticker)
     }
+
+    override fun subscribeToAlreadyFollowedTickers(currencies: List<String>) =
+            currencies.forEach { addNewTickerToSubscribedTickers(it) }
+
+    private fun addNewTickerToSubscribedTickers(ticker: String) =
+        subscribedTickers.add(shouldBeMappedTickets[ticker]?.let { getUsdtPairForTicker(it) }
+                ?: getUsdtPairForTicker(ticker))
+
+    private fun getUsdtPairForTicker(ticker: String) = if (ticker in stablecoins) "USDT_$ticker" else "${ticker}_USDT"
 
     private fun updateSubscribedTickerForConnection() {
         val subscribeMessage = mapOf(
@@ -74,24 +87,22 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
         logger.info("WhiteBit WS connection was updated")
     }
 
-    override fun getLastPrices(accountId: Long, tickers: List<String>): Map<String, Double> {
-        return tickers.mapNotNull { ticker ->
+    override fun getLastPrices(accountId: Long, tickers: List<String>): Map<String, Double> =
+        tickers.mapNotNull { ticker ->
             pricesCache[ticker]?.let { price -> ticker to price }
         }.toMap()
-    }
 
     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) =
             logger.error("got failure for WhiteBit WS connection, error: ${t.message}")
 
     override fun onMessage(webSocket: WebSocket, text: String) = handleUpdateMessage(text)
 
-    private fun handleUpdateMessage(text: String) {
+    private fun handleUpdateMessage(text: String) =
         gson.mapRespToMarketUpdate<WhiteBitWSMarketResp>(text).takeIf { it.method == "market_update" }
                 ?.let {
                     updateLatestPrices(it)
                     notifyUsersWithMarketUpdate(it)
-                } ?: Unit
-    }
+                } ?: logger.info("received unpredicted message from WhiteBit WS: $text")
 
     private fun updateLatestPrices(update: WhiteBitWSMarketResp) {
         val ticker: String = getTickerFromResp(update)
@@ -116,6 +127,8 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
     override fun onOpen(webSocket: WebSocket, response: Response) {
         this.webSocket = webSocket
         logger.info("established connection with WhiteBit WS successfully!")
+
+        updateSubscribedTickerForConnection()
     }
 
     private fun notifyAccountsForTicker(accountsToBeNotified: MutableList<Long>, update: WhiteBitWSMarketResp) =

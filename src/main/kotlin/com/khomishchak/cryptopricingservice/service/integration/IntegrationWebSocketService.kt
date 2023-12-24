@@ -9,4 +9,5 @@ interface IntegrationWebSocketService {
     fun connect(client: OkHttpClient)
     fun subscribe(accountId: Long, tickers: List<String>)
     fun getLastPrices(accountId: Long, tickers: List<String>): Map<String, Double>
+    fun subscribeToAlreadyFollowedTickers(currencies: List<String>)
 }
