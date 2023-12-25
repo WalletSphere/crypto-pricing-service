@@ -1,11 +1,12 @@
 package com.khomishchak.cryptopricingservice.service.integration.exchangers.white_bit
 
 import com.google.gson.Gson
+import com.khomishchak.cryptopricingservice.model.integration.ChangedPriceMessage
 import org.springframework.stereotype.Service
 import com.khomishchak.cryptopricingservice.service.integration.IntegrationWebSocketService
 import com.khomishchak.cryptopricingservice.model.integration.CryptoExchanger
-import com.khomishchak.cryptopricingservice.model.integration.WhiteBitWSMarketResp
-import com.khomishchak.cryptopricingservice.model.integration.mapRespToMarketUpdate
+import com.khomishchak.cryptopricingservice.model.integration.WhiteBitLastPriceUpdate
+import com.khomishchak.cryptopricingservice.model.integration.mapRespToLastPriceUpdate
 import com.khomishchak.cryptopricingservice.service.ws.SessionMappingService
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -80,7 +81,7 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
     private fun updateSubscribedTickerForConnection() {
         val subscribeMessage = mapOf(
                 "id" to 737457,
-                "method" to "market_subscribe",
+                "method" to "lastprice_subscribe",
                 "params" to subscribedTickers
         )
         webSocket.send(gson.toJson(subscribeMessage))
@@ -98,31 +99,21 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
     override fun onMessage(webSocket: WebSocket, text: String) = handleUpdateMessage(text)
 
     private fun handleUpdateMessage(text: String) =
-        gson.mapRespToMarketUpdate<WhiteBitWSMarketResp>(text).takeIf { it.method == "market_update" }
+        gson.mapRespToLastPriceUpdate<WhiteBitLastPriceUpdate>(text).takeIf { it.method == "lastprice_update" }
                 ?.let {
-                    updateLatestPrices(it)
-                    notifyUsersWithMarketUpdate(it)
+                    var preparedMessage = mapRespToMessageToSend(it)
+                    updateLatestPrices(preparedMessage)
+                    notifyUsersWithLastPriceUpdate(preparedMessage)
                 } ?: logger.info("received unpredicted message from WhiteBit WS: $text")
 
-    private fun updateLatestPrices(update: WhiteBitWSMarketResp) {
-        val ticker: String = getTickerFromResp(update)
-        pricesCache.put(ticker, getLastPriceFromResp(update))
-    }
+    private fun updateLatestPrices(update: ChangedPriceMessage) = pricesCache.put(getTickerFromResp(update), update.lastPrice)
 
-    private fun getLastPriceFromResp(update: WhiteBitWSMarketResp): Double =
-            update.getTradingMetrics()?.last?.toDouble() ?: 0.0
+    private fun notifyUsersWithLastPriceUpdate(update: ChangedPriceMessage) = notifyAccounts(update)
 
-    private fun notifyUsersWithMarketUpdate(update: WhiteBitWSMarketResp) {
-        val ticker: String = getTickerFromResp(update)
-        notifyAccounts(update, ticker)
-    }
+    private fun getTickerFromResp(update: ChangedPriceMessage): String = update.ticker.substringBefore("_")
 
-    private fun getTickerFromResp(update: WhiteBitWSMarketResp): String =
-            update.params.firstOrNull()?.toString()?.substringBefore("_").orEmpty()
-
-
-    private fun notifyAccounts(update: WhiteBitWSMarketResp, ticker: String) =
-            subscribers[ticker]?.let { notifyAccountsForTicker(it, update) }
+    private fun notifyAccounts(update: ChangedPriceMessage) =
+            subscribers[getTickerFromResp(update)]?.let { notifyAccountsForTicker(it, update) }
 
     override fun onOpen(webSocket: WebSocket, response: Response) {
         this.webSocket = webSocket
@@ -131,6 +122,9 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
         updateSubscribedTickerForConnection()
     }
 
-    private fun notifyAccountsForTicker(accountsToBeNotified: MutableList<Long>, update: WhiteBitWSMarketResp) =
+    private fun notifyAccountsForTicker(accountsToBeNotified: MutableList<Long>, update: ChangedPriceMessage) =
             accountsToBeNotified.forEach { sessionMappingService.sendMessageToSession(it, update.toString())}
+
+    private fun mapRespToMessageToSend(update: WhiteBitLastPriceUpdate) =
+            ChangedPriceMessage(update.params[0], update.params[1].toDouble(), CryptoExchanger.WHITE_BIT)
 }
