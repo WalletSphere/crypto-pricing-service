@@ -6,26 +6,25 @@ import org.springframework.stereotype.Service
 import com.khomishchak.cryptopricingservice.service.integration.IntegrationWebSocketService
 import com.khomishchak.cryptopricingservice.model.integration.CryptoExchanger
 import com.khomishchak.cryptopricingservice.model.integration.WhiteBitLastPriceUpdate
-import com.khomishchak.cryptopricingservice.model.integration.mapRespToLastPriceUpdate
 import com.khomishchak.cryptopricingservice.service.ws.SessionMappingService
+import com.khomishchak.cryptopricingservice.utility.mapJsonResp
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.WebSocketListener
 import okhttp3.WebSocket
 import okhttp3.Response
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.web.client.RestTemplate
 import java.util.concurrent.ConcurrentHashMap
 
 const val WEBSOCKET_CONNECT_URL = "wss://api.whitebit.com/ws";
 
 @Service
-class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
+class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService, @Qualifier("pricingServiceRestTemplate") restTemplate: RestTemplate)
     : IntegrationWebSocketService, WebSocketListener() {
 
     private val gson = Gson()
-
-    val stablecoins = setOf("UAH", "USD", "PLN")
-    val shouldBeMappedTickets = mapOf("USDT" to "USD", "WBT-HOLD" to "WBT")
 
     private var subscribers = ConcurrentHashMap<String, MutableList<Long>>()
     private var subscribedTickers = mutableListOf<String>()
@@ -98,17 +97,20 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
 
     override fun onMessage(webSocket: WebSocket, text: String) = handleUpdateMessage(text)
 
-    private fun handleUpdateMessage(text: String) =
-        gson.mapRespToLastPriceUpdate<WhiteBitLastPriceUpdate>(text).takeIf { it.method == "lastprice_update" }
+    private fun handleUpdateMessage(text: String) {
+        gson.mapJsonResp<WhiteBitLastPriceUpdate>(text).takeIf { it.method == "lastprice_update" }
                 ?.let {
-                    var preparedMessage = mapRespToMessageToSend(it)
-                    updateLatestPrices(preparedMessage)
-                    notifyUsersWithLastPriceUpdate(preparedMessage)
+                    formatAndSendMessage(it)
                 } ?: logger.info("received unpredicted message from WhiteBit WS: $text")
+    }
+
+    private fun formatAndSendMessage (message: WhiteBitLastPriceUpdate) =
+            mapRespToMessageToSend(message).also {
+                updateLatestPrices(it)
+                notifyAccounts(it)
+            }
 
     private fun updateLatestPrices(update: ChangedPriceMessage) = pricesCache.put(getTickerFromResp(update), update.lastPrice)
-
-    private fun notifyUsersWithLastPriceUpdate(update: ChangedPriceMessage) = notifyAccounts(update)
 
     private fun getTickerFromResp(update: ChangedPriceMessage): String = update.ticker.substringBefore("_")
 
