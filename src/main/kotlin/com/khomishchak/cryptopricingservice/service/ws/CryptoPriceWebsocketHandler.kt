@@ -9,6 +9,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler
 class CryptoPriceWebsocketHandler (private val sessionMappingService: SessionMappingService,
                                    private val webSocketService: WebSocketService): TextWebSocketHandler() {
 
+    // TODO refactor method to use Strategy Pattern
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
         val json = JsonParser.parseString(message.payload).asJsonObject
         val method = json["method"].asString
@@ -21,8 +22,12 @@ class CryptoPriceWebsocketHandler (private val sessionMappingService: SessionMap
 
             sessionMappingService.registerSession(session, accountId)
             webSocketService.subscribe(accountId, exchanger, tickers)
+            sendLatestPrices(accountId, exchanger, tickers)
         }
     }
 
-
+    private fun sendLatestPrices(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>) {
+        val lastPrices = webSocketService.getLastPrices(accountId, exchanger, tickers)
+        sessionMappingService.sendMessageToSession(accountId, lastPrices.toString())
+    }
 }
