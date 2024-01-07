@@ -14,14 +14,12 @@ import okhttp3.WebSocketListener
 import okhttp3.WebSocket
 import okhttp3.Response
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.web.client.RestTemplate
 import java.util.concurrent.ConcurrentHashMap
 
 const val WEBSOCKET_CONNECT_URL = "wss://api.whitebit.com/ws";
 
 @Service
-class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService, @Qualifier("pricingServiceRestTemplate") restTemplate: RestTemplate)
+class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
     : IntegrationWebSocketService, WebSocketListener() {
 
     private val gson = Gson()
@@ -120,7 +118,6 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService,
     override fun onOpen(webSocket: WebSocket, response: Response) {
         this.webSocket = webSocket
         logger.info("established connection with WhiteBit WS successfully!")
-
         updateSubscribedTickerForConnection()
     }
 

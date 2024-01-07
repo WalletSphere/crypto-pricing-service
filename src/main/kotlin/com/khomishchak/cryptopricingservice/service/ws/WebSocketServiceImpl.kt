@@ -7,17 +7,18 @@ import com.khomishchak.cryptopricingservice.model.internall.exchanger.UsedTokens
 import com.khomishchak.cryptopricingservice.service.integration.IntegrationWebSocketService
 import com.khomishchak.cryptopricingservice.utility.mapJsonResp
 import okhttp3.OkHttpClient
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 import org.springframework.web.client.RestTemplate
 import org.springframework.web.client.getForObject
 
 const val GET_USED_CURRENCIES_URL = "http://localhost:8080/exchangers/used-currencies"
 @Service
-class WebSocketServiceImpl (private val integrationWebSocketConnectors: List<IntegrationWebSocketService>)
+class WebSocketServiceImpl (private val integrationWebSocketConnectors: List<IntegrationWebSocketService>,
+                            @Qualifier("pricingServiceRestTemplate") private val restTemplate: RestTemplate)
     : WebSocketService {
 
     private val client = OkHttpClient()
-    val restTemplate = RestTemplate()
 
     private val websocketIntegrations: Map<CryptoExchanger, IntegrationWebSocketService> =
             integrationWebSocketConnectors.associateBy { it.getCryptoExchangerType() }
