@@ -8,5 +8,5 @@ import org.springframework.web.client.RestTemplate
 class PricingServiceConfig {
 
     @Bean("pricingServiceRestTemplate")
-    fun getRestTEmplate() = RestTemplate();
+    fun getRestTemplate() = RestTemplate();
 }
