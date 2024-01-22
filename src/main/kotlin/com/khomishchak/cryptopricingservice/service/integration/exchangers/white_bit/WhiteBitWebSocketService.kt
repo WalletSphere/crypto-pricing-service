@@ -27,7 +27,7 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
     private var subscribers = ConcurrentHashMap<String, MutableList<Long>>()
     private var subscribedTickers = mutableListOf<String>()
 
-    private var pricesCache = mutableMapOf <String, Double>()
+    private var pricesCache = mutableMapOf<String, Double>()
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -70,8 +70,8 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
             currencies.forEach { addNewTickerToSubscribedTickers(it) }
 
     private fun addNewTickerToSubscribedTickers(ticker: String) =
-        subscribedTickers.add(shouldBeMappedTickets[ticker]?.let { getUsdtPairForTicker(it) }
-                ?: getUsdtPairForTicker(ticker))
+            subscribedTickers.add(shouldBeMappedTickets[ticker]?.let { getUsdtPairForTicker(it) }
+                    ?: getUsdtPairForTicker(ticker))
 
     private fun getUsdtPairForTicker(ticker: String) = if (ticker in stablecoins) "USDT_$ticker" else "${ticker}_USDT"
 
@@ -86,9 +86,9 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
     }
 
     override fun getLastPrices(accountId: Long, tickers: List<String>): Map<String, Double> =
-        tickers.mapNotNull { ticker ->
-            pricesCache[ticker]?.let { price -> ticker to price }
-        }.toMap()
+            tickers.mapNotNull { ticker ->
+                pricesCache[ticker]?.let { price -> ticker to price }
+            }.toMap()
 
     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) =
             logger.error("got failure for WhiteBit WS connection, error: ${t.message}")
@@ -108,12 +108,13 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
                 notifyAccounts(it)
             }
 
-    private fun updateLatestPrices(update: ChangedPriceMessage) = pricesCache.put(getTickerFromResp(update), update.lastPrice)
+    private fun updateLatestPrices(update: ChangedPriceMessage) = pricesCache.put(update.ticker, update.lastPrice)
 
-    private fun getTickerFromResp(update: ChangedPriceMessage): String = update.ticker.substringBefore("_")
+    private fun getTickerFromResp(tickerWithPrefix: String): String = tickerWithPrefix.substringBefore("_")
 
     private fun notifyAccounts(update: ChangedPriceMessage) =
-            subscribers[getTickerFromResp(update)]?.let { notifyAccountsForTicker(it, update) }
+            subscribers[update.ticker]?.let { notifyAccountsForTicker(it, update) }
+
 
     override fun onOpen(webSocket: WebSocket, response: Response) {
         this.webSocket = webSocket
@@ -122,8 +123,8 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
     }
 
     private fun notifyAccountsForTicker(accountsToBeNotified: MutableList<Long>, update: ChangedPriceMessage) =
-            accountsToBeNotified.forEach { sessionMappingService.sendMessageToSession(it, update.toString())}
+            accountsToBeNotified.forEach { sessionMappingService.sendMessageToSession(it, gson.toJson(update))}
 
     private fun mapRespToMessageToSend(update: WhiteBitLastPriceUpdate) =
-            ChangedPriceMessage(update.params[0], update.params[1].toDouble(), CryptoExchanger.WHITE_BIT)
+            ChangedPriceMessage(getTickerFromResp(update.params[0]), update.params[1].toDouble(), CryptoExchanger.WHITE_BIT)
 }
