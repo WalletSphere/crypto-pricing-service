@@ -7,19 +7,28 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Service
 class SessionMappingService {
-    private val sessionMap = ConcurrentHashMap<Long, ConcurrentHashMap<String, WebSocketSession>>()
+
+    private val idToSessionMap = ConcurrentHashMap<Long, WebSocketSession>()
+    private val sessionToIdMap = ConcurrentHashMap<WebSocketSession, Long>()
 
     fun registerSession(session: WebSocketSession, accountId: Long) {
-        val sessions = sessionMap.computeIfAbsent(accountId) { ConcurrentHashMap() }
-        sessions[session.id] = session
+        idToSessionMap[accountId] = session
+        sessionToIdMap[session] = accountId
     }
 
-    // TODO: implement remove session functionality
-    fun removeSession(accountId: Long) = sessionMap.remove(accountId)
+    fun removeSession(accountId: Long) {
+        idToSessionMap[accountId].let {
+            idToSessionMap[accountId]
+            sessionToIdMap[it]
+        }
+    }
 
-    fun getSession(accountId: Long): WebSocketSession? = sessionMap[accountId]?.values?.firstOrNull();
+    fun getSession(accountId: Long) = idToSessionMap[accountId]
+    fun getUserId(session: WebSocketSession) = sessionToIdMap[session] ?: 0L
 
     fun sendMessageToSession(accountId: Long, message: String) =
             getSession(accountId)?.takeIf { it.isOpen
             }?.sendMessage(TextMessage(message))
+
+    fun sendMessageToSession(session: WebSocketSession, message: String) = session.sendMessage(TextMessage(message))
 }
