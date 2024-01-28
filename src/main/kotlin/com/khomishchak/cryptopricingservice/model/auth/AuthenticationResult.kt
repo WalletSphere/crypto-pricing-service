@@ -1,6 +1,6 @@
 package com.khomishchak.cryptopricingservice.model.auth
 
-enum class AuthenticationStatus{
+enum class AuthenticationResult {
     AUTHENTICATED,
-    UNAUTHENTICATED,
+    UNAUTHENTICATED
 }
