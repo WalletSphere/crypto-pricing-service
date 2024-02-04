@@ -8,6 +8,7 @@ import com.khomishchak.cryptopricingservice.model.auth.AuthenticationResult
 import com.khomishchak.cryptopricingservice.model.auth.JwtTokenValidationResult
 import com.khomishchak.cryptopricingservice.service.ws.SessionMappingService
 import com.khomishchak.cryptopricingservice.service.ws.message.WsMessageResolver
+import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
@@ -16,10 +17,19 @@ import org.springframework.stereotype.Service
 import org.springframework.web.client.RestTemplate
 import org.springframework.web.socket.WebSocketSession
 
+fun String.toAuthorizationHeader() = HttpHeaders().let {
+        it.set(HttpHeaders.AUTHORIZATION, "Bearer $this")
+        it.contentType = MediaType.APPLICATION_JSON
+        it
+    }
+
+
 @Service
 class AuthenticationMessageHandler(@Qualifier("pricingServiceRestTemplate") private val restTemplate: RestTemplate,
                                    private val gson: Gson, private val sessionMappingService: SessionMappingService)
                                     : WsMessageResolver {
+
+    private val logger = KotlinLogging.logger { }
 
     override fun getMessage() = "authenticate"
 
@@ -27,8 +37,10 @@ class AuthenticationMessageHandler(@Qualifier("pricingServiceRestTemplate") priv
         runCatching {
             validateJwtToken(messageJson["jwt"].asString)
         }.onSuccess {
+            logger.info { "validated jwt token successfully, validation result: ${it.validated}" }
             handleSuccessfulAuthenticationAttempt(it, session)
         }.onFailure {
+            logger.error { "could not validate jwt token, error: $it" }
             handleFailedTokenValidation(session)
         }
     }
@@ -49,18 +61,12 @@ class AuthenticationMessageHandler(@Qualifier("pricingServiceRestTemplate") priv
 
 
     private fun validateJwtToken(jwt: String): JwtTokenValidationResult =
-        HttpEntity(null, createAuthHeader(jwt)).let {
+        HttpEntity(null, jwt.toAuthorizationHeader()).let {
             restTemplate.postForObject(
                     AUTHENTICATE_TOKEN_URL,
                     it,
                     JwtTokenValidationResult::class.java
             ) ?: JwtTokenValidationResult(0L, false)
-        }
-
-    private fun createAuthHeader(jwt: String): HttpHeaders =
-        HttpHeaders().apply {
-            set(HttpHeaders.AUTHORIZATION, "Bearer $jwt")
-            contentType = MediaType.APPLICATION_JSON
         }
 
 }
