@@ -17,10 +17,9 @@ import org.springframework.stereotype.Service
 import org.springframework.web.client.RestTemplate
 import org.springframework.web.socket.WebSocketSession
 
-fun String.toAuthorizationHeader() = HttpHeaders().let {
+fun String.toAuthorizationHeader() = HttpHeaders().also {
         it.set(HttpHeaders.AUTHORIZATION, "Bearer $this")
         it.contentType = MediaType.APPLICATION_JSON
-        it
     }
 
 
