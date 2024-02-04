@@ -1,6 +1,7 @@
 package com.khomishchak.cryptopricingservice.service.integration.exchangers.white_bit
 
 import com.google.gson.Gson
+import com.khomishchak.cryptopricingservice.model.WHITEBIT_WEBSOCKET_CONNECT_URL
 import com.khomishchak.cryptopricingservice.model.integration.ChangedPriceMessage
 import org.springframework.stereotype.Service
 import com.khomishchak.cryptopricingservice.service.integration.IntegrationWebSocketService
@@ -8,15 +9,13 @@ import com.khomishchak.cryptopricingservice.model.integration.CryptoExchanger
 import com.khomishchak.cryptopricingservice.model.integration.WhiteBitLastPriceUpdate
 import com.khomishchak.cryptopricingservice.service.ws.SessionMappingService
 import com.khomishchak.cryptopricingservice.utility.mapJsonResp
+import mu.KotlinLogging
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.WebSocketListener
 import okhttp3.WebSocket
 import okhttp3.Response
-import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
-
-const val WEBSOCKET_CONNECT_URL = "wss://api.whitebit.com/ws";
 
 @Service
 class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
@@ -29,7 +28,7 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
 
     private var pricesCache = mutableMapOf<String, Double>()
 
-    private val logger = LoggerFactory.getLogger(javaClass)
+    private val logger = KotlinLogging.logger {}
 
     private lateinit var webSocket: WebSocket
 
@@ -37,7 +36,7 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
 
     override fun connect(client: OkHttpClient) {
         val request = Request.Builder()
-                .url(WEBSOCKET_CONNECT_URL)
+                .url(WHITEBIT_WEBSOCKET_CONNECT_URL)
                 .build()
 
         client.newWebSocket(request, this)
