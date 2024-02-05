@@ -1,6 +1,8 @@
 package com.khomishchak.cryptopricingservice.service.ws
 
 import com.google.gson.Gson
+import com.khomishchak.cryptopricingservice.model.GET_USED_CURRENCIES_URL
+import com.khomishchak.cryptopricingservice.model.MarkerSubscriptionDetails
 import com.khomishchak.cryptopricingservice.model.integration.CryptoExchanger
 import com.khomishchak.cryptopricingservice.model.internall.exchanger.UsedToken
 import com.khomishchak.cryptopricingservice.model.internall.exchanger.UsedTokens
@@ -12,7 +14,6 @@ import org.springframework.stereotype.Service
 import org.springframework.web.client.RestTemplate
 import org.springframework.web.client.getForObject
 
-const val GET_USED_CURRENCIES_URL = "http://localhost:8080/exchangers/used-currencies"
 @Service
 class WebSocketServiceImpl (private val integrationWebSocketConnectors: List<IntegrationWebSocketService>,
                             @Qualifier("pricingServiceRestTemplate") private val restTemplate: RestTemplate)
@@ -28,8 +29,8 @@ class WebSocketServiceImpl (private val integrationWebSocketConnectors: List<Int
         integrationWebSocketConnectors.forEach { it.connect(client) }
     }
 
-    override fun subscribe(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>) =
-            websocketIntegrations[exchanger]?.subscribe(accountId, tickers) ?: Unit
+    override fun subscribe(accountId: Long, subscriptionDetails: MarkerSubscriptionDetails) =
+            websocketIntegrations[subscriptionDetails.exchanger]?.subscribe(accountId, subscriptionDetails) ?: Unit
 
     override fun getLastPrices(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>) =
             websocketIntegrations[exchanger]?.getLastPrices(accountId, tickers) ?: emptyMap();
