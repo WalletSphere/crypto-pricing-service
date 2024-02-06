@@ -1,6 +1,7 @@
 package com.khomishchak.cryptopricingservice.service.integration.exchangers.white_bit
 
 import com.google.gson.Gson
+import com.khomishchak.cryptopricingservice.model.MarkerSubscriptionDetails
 import com.khomishchak.cryptopricingservice.model.WHITEBIT_WEBSOCKET_CONNECT_URL
 import com.khomishchak.cryptopricingservice.model.integration.ChangedPriceMessage
 import org.springframework.stereotype.Service
@@ -17,14 +18,17 @@ import okhttp3.WebSocket
 import okhttp3.Response
 import java.util.concurrent.ConcurrentHashMap
 
+// TODO separate given service class to multiple services to reach single responsibility
 @Service
 class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
     : IntegrationWebSocketService, WebSocketListener() {
 
     private val gson = Gson()
 
+    // TODO: create a separate cache layer
     private var subscribers = ConcurrentHashMap<String, MutableList<Long>>()
     private var subscribedTickers = mutableListOf<String>()
+    private var initialCurrencies = ConcurrentHashMap<String, MutableList<Long>>()
 
     private var pricesCache = mutableMapOf<String, Double>()
 
@@ -42,26 +46,36 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
         client.newWebSocket(request, this)
     }
 
-    // TODO: should be refactored
-    override fun subscribe(accountId: Long, tickers: List<String>) {
-        var shouldReloadWsConnection = false
-        tickers.forEach { ticker ->
-            if (addNewTickerOrAccountAsSubscriber(ticker, accountId)) shouldReloadWsConnection = true
+    override fun subscribe(accountId: Long, subscriptionDetails: MarkerSubscriptionDetails) {
+        var shouldReloadWsConnection = addInitialCurrencyOrAccountAsSubscriber(subscriptionDetails.initialCurrency, accountId)
+        subscriptionDetails.tickers.forEach { ticker ->
+            if (addNewTickerOrAccountAsSubscriber(ticker, accountId) && !shouldReloadWsConnection) {
+                shouldReloadWsConnection = true
+            }
         }
         if (shouldReloadWsConnection) updateSubscribedTickerForConnection()
     }
 
-    private fun addNewTickerOrAccountAsSubscriber(ticker: String, accountId: Long): Boolean {
-        val isNewTicker = subscribers[ticker] == null
+    private fun addInitialCurrencyOrAccountAsSubscriber(initialCurrency: String, accountId: Long) =
+            addNewTickerOrAccountAsSubscriberToMap(initialCurrency, accountId, initialCurrencies)
+
+
+    private fun addNewTickerOrAccountAsSubscriber(ticker: String, accountId: Long) =
+            addNewTickerOrAccountAsSubscriberToMap(ticker, accountId, subscribers)
+
+
+    private fun addNewTickerOrAccountAsSubscriberToMap(ticker: String, accountId: Long,
+                                  subscriptionMap: ConcurrentHashMap<String, MutableList<Long>>) : Boolean{
+        val isNew = subscriptionMap[ticker] == null
         ticker.let {
-            subscribers.getOrPut(it) { mutableListOf(accountId) }
-            addNewTicker(it, accountId)
+            subscriptionMap.getOrPut(it) { mutableListOf(accountId) }
+            addNewTicker(it, accountId, subscriptionMap)
         }
-        return isNewTicker
+        return isNew
     }
 
-    private fun addNewTicker(ticker: String, accoutId: Long) {
-        subscribers[ticker] = mutableListOf(accoutId)
+    private fun addNewTicker(ticker: String, accoutId: Long, subscriptionMap: ConcurrentHashMap<String, MutableList<Long>>) {
+        subscriptionMap[ticker] = mutableListOf(accoutId)
         addNewTickerToSubscribedTickers(ticker)
     }
 
@@ -102,17 +116,29 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
     }
 
     private fun formatAndSendMessage (message: WhiteBitLastPriceUpdate) =
-            mapRespToMessageToSend(message).also {
+            mapRespToChangedPriceMessage(message).also {
                 updateLatestPrices(it)
                 notifyAccounts(it)
             }
 
     private fun updateLatestPrices(update: ChangedPriceMessage) = pricesCache.put(update.ticker, update.lastPrice)
 
-    private fun getTickerFromResp(tickerWithPrefix: String): String = tickerWithPrefix.substringBefore("_")
+    private fun getTickerFromResp(tickerWithPrefix: String) = tickerWithPrefix.let {
+        it.substringBefore("_").let {
+            prefix -> if (prefix != "USDT") prefix else it.substringAfter("_")
+        }
+    }
 
-    private fun notifyAccounts(update: ChangedPriceMessage) =
-            subscribers[update.ticker]?.let { notifyAccountsForTicker(it, update) }
+    private fun notifyAccounts(update: ChangedPriceMessage) {
+        subscribers[update.ticker]?.let { notifyAccountsForTicker(it, update) }
+        notifyAccountAboutInitialCurrencyUpdate(update)
+    }
+
+    private fun notifyAccountAboutInitialCurrencyUpdate(update: ChangedPriceMessage) =
+        initialCurrencies[update.ticker]?.let {
+            update.ticker = "INITIAL_CURRENCY"
+            notifyAccountsForTicker(it, update)
+        }
 
 
     override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -124,6 +150,6 @@ class WhiteBitWebSocketService(val sessionMappingService: SessionMappingService)
     private fun notifyAccountsForTicker(accountsToBeNotified: MutableList<Long>, update: ChangedPriceMessage) =
             accountsToBeNotified.forEach { sessionMappingService.sendMessageToSession(it, gson.toJson(update))}
 
-    private fun mapRespToMessageToSend(update: WhiteBitLastPriceUpdate) =
+    private fun mapRespToChangedPriceMessage(update: WhiteBitLastPriceUpdate) =
             ChangedPriceMessage(getTickerFromResp(update.params[0]), update.params[1].toDouble(), CryptoExchanger.WHITE_BIT)
 }
