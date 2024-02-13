@@ -32,8 +32,8 @@ class WebSocketServiceImpl (private val integrationWebSocketConnectors: List<Int
     override fun subscribe(accountId: Long, subscriptionDetails: MarkerSubscriptionDetails) =
             websocketIntegrations[subscriptionDetails.exchanger]?.subscribe(accountId, subscriptionDetails) ?: Unit
 
-    override fun getLastPrices(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>) =
-            websocketIntegrations[exchanger]?.getLastPrices(accountId, tickers) ?: emptyMap();
+    override fun getLastPrices(exchanger: CryptoExchanger, tickers: List<String>) =
+            websocketIntegrations[exchanger]?.getLastPrices(tickers) ?: emptyMap();
 
     private fun subscribeToAlreadyFollowedTickers() {
         val response = restTemplate.getForObject<String>(GET_USED_CURRENCIES_URL)

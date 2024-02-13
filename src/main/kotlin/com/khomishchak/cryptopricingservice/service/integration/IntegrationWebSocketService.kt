@@ -9,6 +9,6 @@ interface IntegrationWebSocketService {
     fun getCryptoExchangerType(): CryptoExchanger
     fun connect(client: OkHttpClient)
     fun subscribe(accountId: Long, subscriptionDetails: MarkerSubscriptionDetails)
-    fun getLastPrices(accountId: Long, tickers: List<String>): Map<String, Double>
+    fun getLastPrices(tickers: List<String>): Map<String, Double>
     fun subscribeToAlreadyFollowedTickers(currencies: List<String>)
 }
