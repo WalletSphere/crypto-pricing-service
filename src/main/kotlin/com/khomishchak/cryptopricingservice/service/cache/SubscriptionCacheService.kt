@@ -21,17 +21,10 @@ class SubscriptionCacheService {
      *
      * @return if at least 1 new ticker was added to the cache
      */
-    fun subscribeToTickers(accountId: Long, tickers: List<String>, exchanger: CryptoExchanger): Boolean{
-        var updatedSubscribedTickers = false
-
-        tickers.forEach { ticker ->
-            if (addNewTickerOrAccountAsSubscriber(exchanger, ticker, accountId, subscribers) && !updatedSubscribedTickers) {
-                updatedSubscribedTickers = true
-            }
-        }
-
-        return updatedSubscribedTickers
-    }
+    fun subscribeToTickers(accountId: Long, tickers: List<String>, exchanger: CryptoExchanger) =
+            tickers.map {
+                addNewTickerOrAccountAsSubscriber(exchanger, it, accountId, subscribers)
+            }.toSet().contains(true)
 
     /**
      * add user's initial currency to local cache
