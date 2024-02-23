@@ -99,12 +99,13 @@ class WhiteBitWebSocketService(private val sessionMappingService: SessionMapping
             ChangedPriceMessage(getTickerFromResp(update.params[0]), update.params[1].toDouble(), CryptoExchanger.WHITE_BIT)
 
     private fun updateSubscribedTickerForConnection(subscribedTickers: MutableList<String>) {
-        val subscribeMessage = mapOf(
-                "id" to 737457,
-                "method" to "lastprice_subscribe",
-                "params" to subscribedTickers
-        )
-        webSocket.send(gson.toJson(subscribeMessage))
-        logger.info("WhiteBit WS connection was updated")
+        mapOf(
+            "id" to 737457,
+            "method" to "lastprice_subscribe",
+            "params" to subscribedTickers
+        ).apply {
+            webSocket.send(gson.toJson(this))
+            logger.info("WhiteBit WS connection was updated")
+        }
     }
 }

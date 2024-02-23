@@ -80,7 +80,8 @@ class SubscriptionCacheService {
                 subscribedTickers.getOrPut(exchanger) { mutableListOf() }.add(it)
             }
 
-    private fun getUsdtPairForTicker(ticker: String): String =
-            (shouldBeMappedTickets[ticker] ?: ticker)
-                .let { if (it in stablecoins) "USDT_$it" else "${it}_USDT" }
+    private fun getUsdtPairForTicker(ticker: String): String {
+        val mappedTicker = shouldBeMappedTickets[ticker] ?: ticker
+        return if (mappedTicker in stablecoins)  "USDT_$mappedTicker" else "${mappedTicker}_USDT"
+    }
 }
