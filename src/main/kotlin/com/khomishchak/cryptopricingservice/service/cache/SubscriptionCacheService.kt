@@ -53,20 +53,27 @@ class SubscriptionCacheService {
 
     private fun addNewTickerOrAccountAsSubscriber(exchanger: CryptoExchanger, ticker: String, accountId: Long,
                                                   subscriptionMap: ConcurrentHashMap<CryptoExchanger, MutableList<Subscription>>): Boolean {
-        subscriptionMap.getOrPut(exchanger) { mutableListOf() }
-                .let {
-                    val subscription = it.find { it.ticker == ticker }
+        var subscriptions = subscriptionMap.getOrPut(exchanger) { mutableListOf() }
+        return subscriptions.find { it.ticker == ticker }
+                .let { handleSubscription(it, subscriptionMap, exchanger, ticker, accountId) }
+    }
 
-                    if (subscription == null) {
-                        subscribedNewTicker(subscriptionMap, exchanger, ticker, accountId)
-                        return true
-                    }
+    private fun handleSubscription(subscription: Subscription?,
+                                   subscriptionMap: ConcurrentHashMap<CryptoExchanger, MutableList<Subscription>>,
+                                   exchanger: CryptoExchanger, ticker: String, accountId: Long): Boolean {
+        if (subscription == null) {
+            subscribedNewTicker(subscriptionMap, exchanger, ticker, accountId)
+            return true
+        }
 
-                    if (!subscription.subscribers.contains(accountId)) {
-                        subscription.subscribers.add(accountId)
-                    }
-                    return false
-                }
+        subscribeAccountIfNotSubscribedYet(subscription, accountId)
+        return false
+    }
+
+    private fun subscribeAccountIfNotSubscribedYet(subscription: Subscription, accountId: Long) {
+        if (!subscription.subscribers.contains(accountId)) {
+            subscription.subscribers.add(accountId)
+        }
     }
 
     private fun subscribedNewTicker(subscriptionMap: ConcurrentHashMap<CryptoExchanger, MutableList<Subscription>>,
