@@ -5,5 +5,5 @@ import com.khomishchak.cryptopricingservice.model.integration.CryptoExchanger
 
 interface WebSocketService {
     fun subscribe(accountId: Long, subscriptionDetails: MarkerSubscriptionDetails)
-    fun getLastPrices(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>): Map<String, Double>
+    fun getLastPrices(exchanger: CryptoExchanger, tickers: List<String>): Map<String, Double>
 }

@@ -36,6 +36,6 @@ class SubscribeMarketMessageResolver(private val gson: Gson,
                 }
 
     private fun sendLatestPrices(accountId: Long, exchanger: CryptoExchanger, tickers: List<String>) =
-            gson.toJson(webSocketService.getLastPrices(accountId, exchanger, tickers))
+            gson.toJson(webSocketService.getLastPrices(exchanger, tickers))
                     ?.let { sessionMappingService.sendMessageToSession(accountId, it) }
 }
